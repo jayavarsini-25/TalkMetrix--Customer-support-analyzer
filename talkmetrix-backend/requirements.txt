@@ -4,3 +4,4 @@ python-dotenv
 groq
 pydantic
 openai
+python-multipart

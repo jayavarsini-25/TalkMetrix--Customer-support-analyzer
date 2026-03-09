@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: talkmetrix-backend
+    env: python
+    plan: free
+    rootDir: talkmetrix-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: talkmetrix-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_PATH
+        value: /var/data/talkmetrix.db
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ORIGIN_REGEX
+        value: ^https://.*\.netlify\.app$
+      - key: RATE_LIMIT_REQUESTS
+        value: 120
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: 60
+      - key: MAX_UPLOAD_MB
+        value: 20
+      - key: TRUSTED_HOSTS
+        value: talkmetrix-backend.onrender.com,*.onrender.com
+      - key: API_AUTH_KEY
+        generateValue: true

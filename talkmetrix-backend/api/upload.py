@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
+from config import MAX_UPLOAD_BYTES
 from db.store import add_audit
 from services.llm_service import evaluate_conversation
 from services.whisper_service import transcribe_audio
+from utils.security import require_api_key
 from utils.ws_manager import manager
 
 router = APIRouter()
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac"}
+ALLOWED_CHAT_EXTS = {".txt", ".md", ".json", ".csv"}
 
 
 def _build_agent_from_filename(filename: str) -> str:
@@ -83,15 +86,38 @@ def _persist_audit(
     return conversation_id
 
 
+def _validate_file(file: UploadFile, allowed_exts: set[str]) -> None:
+    filename = file.filename or ""
+    ext = Path(filename).suffix.lower()
+    if not filename or ext not in allowed_exts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type: {ext or 'missing extension'}",
+        )
+
+
+def _validate_size(raw_bytes: bytes) -> None:
+    if len(raw_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Max allowed is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
+
+
 @router.post("/audio")
 async def upload_audio(
     file: UploadFile = File(...),
     agent_id: str | None = Form(None),
     agent_name: str | None = Form(None),
+    _auth: None = Depends(require_api_key),
 ):
+    _validate_file(file, ALLOWED_AUDIO_EXTS)
+    raw = await file.read()
+    _validate_size(raw)
+
     file_path = UPLOAD_DIR / file.filename
     with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+        buffer.write(raw)
 
     transcript = transcribe_audio(str(file_path))
     evaluation = _normalize_eval(evaluate_conversation(transcript))
@@ -115,8 +141,11 @@ async def upload_chat(
     file: UploadFile = File(...),
     agent_id: str | None = Form(None),
     agent_name: str | None = Form(None),
+    _auth: None = Depends(require_api_key),
 ):
+    _validate_file(file, ALLOWED_CHAT_EXTS)
     content = await file.read()
+    _validate_size(content)
     transcript = content.decode("utf-8", errors="replace")
     evaluation = _normalize_eval(evaluate_conversation(transcript))
     conversation_id = _persist_audit(

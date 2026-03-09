@@ -5,9 +5,10 @@ from collections import defaultdict
 from datetime import datetime
 from statistics import mean
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from db.store import delete_audit, get_audits
+from utils.security import require_api_key
 
 router = APIRouter(tags=["dashboard"])
 
@@ -134,7 +135,7 @@ def conversations():
 
 
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str):
+def delete_conversation(conversation_id: str, _auth: None = Depends(require_api_key)):
     deleted = delete_audit(conversation_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")

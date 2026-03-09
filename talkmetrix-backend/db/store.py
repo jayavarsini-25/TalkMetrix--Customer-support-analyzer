@@ -4,7 +4,10 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path(__file__).resolve().parent / "talkmetrix.db"
+from config import DB_PATH as DB_PATH_ENV
+
+DB_PATH = Path(DB_PATH_ENV).resolve()
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _connect() -> sqlite3.Connection:
