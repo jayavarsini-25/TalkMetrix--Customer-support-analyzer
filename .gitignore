@@ -1,0 +1,13 @@
+# Python cache and runtime files
+__pycache__/
+*.py[cod]
+
+# Backend local runtime artifacts
+*.pid
+*.log
+*.db
+
+# Frontend local build artifacts
+node_modules/
+dist/
+dist-ssr/
