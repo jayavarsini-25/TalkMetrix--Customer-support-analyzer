@@ -3,9 +3,10 @@ import { Link, useLocation } from "react-router-dom";
 import { Search, Bell, Activity, ChevronDown, User, Settings, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
-  { to: "/", label: "Dashboard" },
+  { to: "/dashboard", label: "Dashboard" },
   { to: "/upload", label: "Upload" },
   { to: "/conversations", label: "Conversations" },
   { to: "/analytics", label: "Analytics" },
@@ -16,6 +17,15 @@ const Navbar = () => {
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { toast } = useToast();
+  const { user, logout } = useAuth();
+
+  const initials =
+    user?.fullName
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "TM";
 
   const handleSearchClick = () => {
     toast({
@@ -31,19 +41,28 @@ const Navbar = () => {
     });
   };
 
-  const handleMenuItemClick = (label: string) => {
+  async function handleMenuItemClick(label: string) {
     setShowUserMenu(false);
+    if (label === "Sign out") {
+      await logout();
+      toast({
+        title: "Signed out",
+        description: "Your session has been closed.",
+      });
+      return;
+    }
+
     toast({
       title: label,
       description: `${label} action is available.`,
     });
-  };
+  }
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-16 glass-strong">
       <div className="flex items-center justify-between h-full px-6 max-w-[1600px] mx-auto">
         {/* Left: Logo */}
-        <Link to="/" className="flex items-center gap-2.5 shrink-0">
+        <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0">
           <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
             <Activity className="w-4.5 h-4.5 text-primary-foreground" />
           </div>
@@ -102,7 +121,7 @@ const Navbar = () => {
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-secondary transition-colors"
             >
               <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-semibold text-primary-foreground">
-                JD
+                {initials}
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-muted-foreground hidden sm:block" />
             </button>
@@ -115,7 +134,7 @@ const Navbar = () => {
                   transition={{ duration: 0.15 }}
                   className="absolute right-0 top-12 w-48 py-1.5 rounded-xl glass-strong shadow-elevated"
                 >
-                  {[
+                  {[ 
                     { icon: User, label: "Profile" },
                     { icon: Settings, label: "Settings" },
                     { icon: LogOut, label: "Sign out" },
@@ -130,6 +149,12 @@ const Navbar = () => {
                       {item.label}
                     </button>
                   ))}
+                  {user ? (
+                    <div className="border-t border-border/50 px-3.5 py-2">
+                      <p className="text-sm font-medium text-foreground">{user.fullName}</p>
+                      <p className="text-xs text-muted-foreground">{user.company}</p>
+                    </div>
+                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>

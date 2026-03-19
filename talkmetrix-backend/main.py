@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from api.auth import router as auth_router
 from api.dashboard import router as dashboard_router
 from api.scoring import router as scoring_router
 from api.upload import router as upload_router
@@ -39,6 +40,7 @@ app.add_middleware(
 )
 
 # ✅ Routes
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(scoring_router, prefix="/score", tags=["Scoring"])
 app.include_router(upload_router, prefix="/upload", tags=["Upload"])
 app.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])

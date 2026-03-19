@@ -6,6 +6,41 @@ import ScoreBadge from "@/components/ScoreBadge";
 import { useToast } from "@/hooks/use-toast";
 import { Conversation, deleteConversation, getConversations } from "@/services/api";
 
+type TranscriptMessage = {
+  role: "agent" | "customer";
+  time: string;
+  text: string;
+};
+
+function buildTranscriptMessages(transcript: string): TranscriptMessage[] {
+  const lines = transcript
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return lines.slice(0, 12).map((line, idx) => {
+    const match = line.match(/^(Agent|Customer)\s*:\s*(.+)$/i);
+    const role = match
+      ? match[1].toLowerCase() === "customer"
+        ? "customer"
+        : "agent"
+      : idx % 2 === 0
+        ? "agent"
+        : "customer";
+    const text = match ? match[2].trim() : line;
+
+    return {
+      role,
+      time: `0:${String(idx * 8).padStart(2, "0")}`,
+      text,
+    };
+  });
+}
+
 const Conversations = () => {
   const [items, setItems] = useState<Conversation[]>([]);
   const [search, setSearch] = useState("");
@@ -72,18 +107,7 @@ const Conversations = () => {
 
   const selected = filtered.find((c) => c.id === selectedId) ?? filtered[0];
 
-  const transcriptMessages = selected
-    ? selected.transcript
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .slice(0, 8)
-        .map((text, idx) => ({
-          role: idx % 2 === 0 ? "agent" : "customer",
-          time: `0:${String(idx * 8).padStart(2, "0")}`,
-          text,
-        }))
-    : [];
+  const transcriptMessages = selected ? buildTranscriptMessages(selected.transcript) : [];
 
   return (
     <div className="py-6 md:py-8 space-y-6">

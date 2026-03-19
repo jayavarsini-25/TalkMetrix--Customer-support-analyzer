@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Download, FileSpreadsheet, FileText, Filter, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -9,6 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 
 const Reports = () => {
   const [reports, setReports] = useState<ReportItem[]>([]);
+  const [agentFilter, setAgentFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const { toast } = useToast();
 
   const downloadBlob = (filename: string, content: string, mimeType: string) => {
@@ -65,11 +70,28 @@ const Reports = () => {
     URL.revokeObjectURL(url);
   };
 
+  const agentOptions = useMemo(
+    () => Array.from(new Set(reports.map((report) => report.agent))).sort((a, b) => a.localeCompare(b)),
+    [reports],
+  );
+
+  const filteredReports = useMemo(() => {
+    return reports.filter((report) => {
+      const matchesAgent = agentFilter === "all" || report.agent === agentFilter;
+      const matchesType = typeFilter === "all" || report.type.toLowerCase() === typeFilter;
+      const matchesStatus = statusFilter === "all" || report.status === statusFilter;
+      const matchesFromDate = !fromDate || report.date >= fromDate;
+      const matchesToDate = !toDate || report.date <= toDate;
+      return matchesAgent && matchesType && matchesStatus && matchesFromDate && matchesToDate;
+    });
+  }, [agentFilter, fromDate, reports, statusFilter, toDate, typeFilter]);
+
   const buildCsv = (items: ReportItem[]) => {
-    const header = ["Report ID", "Name", "Type", "Date", "Status", "Size"];
+    const header = ["Report ID", "Name", "Agent", "Type", "Date", "Status", "Size"];
     const rows = items.map((item) => [
       item.id,
       item.name,
+      item.agent,
       item.type,
       item.date,
       item.status,
@@ -89,22 +111,24 @@ const Reports = () => {
       "TalkMetrix Reports Summary",
       `Generated: ${new Date().toISOString()}`,
       "",
-      ...reports.map((item) => `${item.id} | ${item.name} | ${item.type} | ${item.date} | ${item.status}`),
+      ...filteredReports.map(
+        (item) => `${item.id} | ${item.name} | ${item.agent} | ${item.type} | ${item.date} | ${item.status}`,
+      ),
     ];
     const pdfBlob = buildSimplePdf(lines);
     downloadPdfBlob("talkmetrix-report-summary.pdf", pdfBlob);
     toast({
       title: "PDF generated",
-      description: "Report summary has been downloaded.",
+      description: "Filtered report summary has been downloaded.",
     });
   };
 
   const handleExportExcel = () => {
-    const csv = buildCsv(reports);
+    const csv = buildCsv(filteredReports);
     downloadBlob("talkmetrix-reports.csv", csv, "text/csv;charset=utf-8");
     toast({
       title: "Excel export ready",
-      description: "Reports data has been downloaded as CSV.",
+      description: "Filtered reports data has been downloaded as CSV.",
     });
   };
 
@@ -112,6 +136,7 @@ const Reports = () => {
     const reportBody = [
       `Report ID: ${report.id}`,
       `Name: ${report.name}`,
+      `Agent: ${report.agent}`,
       `Type: ${report.type}`,
       `Date: ${report.date}`,
       `Status: ${report.status}`,
@@ -128,6 +153,11 @@ const Reports = () => {
     async function load() {
       const data = await getReports();
       setReports(data.items);
+      if (data.items.length > 0) {
+        const dates = data.items.map((item) => item.date).sort();
+        setFromDate(dates[0]);
+        setToDate(dates[dates.length - 1]);
+      }
     }
     void load();
   }, []);
@@ -169,26 +199,48 @@ const Reports = () => {
           <Filter className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Filters:</span>
         </div>
-        <select className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none">
-          <option>All Agents</option>
+        <select
+          value={agentFilter}
+          onChange={(event) => setAgentFilter(event.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none"
+        >
+          <option value="all">All Agents</option>
+          {agentOptions.map((agent) => (
+            <option key={agent} value={agent}>
+              {agent}
+            </option>
+          ))}
         </select>
-        <select className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none">
-          <option>All Types</option>
-          <option>Quality</option>
-          <option>Compliance</option>
-          <option>Performance</option>
-          <option>Analytics</option>
+        <select
+          value={typeFilter}
+          onChange={(event) => setTypeFilter(event.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none"
+        >
+          <option value="all">All Types</option>
+          <option value="call">Call</option>
+          <option value="chat">Chat</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none"
+        >
+          <option value="all">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="processing">Processing</option>
         </select>
         <input
           type="date"
           className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none"
-          defaultValue="2026-02-01"
+          value={fromDate}
+          onChange={(event) => setFromDate(event.target.value)}
         />
         <span className="text-muted-foreground text-sm">to</span>
         <input
           type="date"
           className="px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm text-foreground outline-none"
-          defaultValue="2026-03-03"
+          value={toDate}
+          onChange={(event) => setToDate(event.target.value)}
         />
       </motion.div>
 
@@ -197,7 +249,7 @@ const Reports = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50">
-                {["Report ID", "Name", "Type", "Date", "Status", "Size", ""].map((h) => (
+                {["Report ID", "Name", "Agent", "Type", "Date", "Status", "Size", ""].map((h) => (
                   <th key={h} className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {h}
                   </th>
@@ -205,7 +257,14 @@ const Reports = () => {
               </tr>
             </thead>
             <tbody>
-              {reports.map((report, i) => (
+              {filteredReports.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    No reports match the current filters.
+                  </td>
+                </tr>
+              ) : null}
+              {filteredReports.map((report, i) => (
                 <motion.tr
                   key={report.id}
                   initial={{ opacity: 0, x: -10 }}
@@ -215,6 +274,7 @@ const Reports = () => {
                 >
                   <td className="py-3 px-3 font-mono text-xs text-muted-foreground">{report.id}</td>
                   <td className="py-3 px-3 font-medium text-foreground">{report.name}</td>
+                  <td className="py-3 px-3 text-muted-foreground">{report.agent}</td>
                   <td className="py-3 px-3">
                     <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground">
                       {report.type}

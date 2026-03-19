@@ -14,6 +14,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 API_AUTH_KEY = (os.getenv("API_AUTH_KEY") or "").strip()
 
 DB_PATH = os.getenv("DB_PATH") or str(Path(__file__).resolve().parent / "db" / "talkmetrix.db")
+AUTH_TOKEN_TTL_HOURS = int(os.getenv("AUTH_TOKEN_TTL_HOURS", "168"))
 
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024

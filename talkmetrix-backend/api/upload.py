@@ -9,17 +9,36 @@ from fastapi.responses import JSONResponse
 
 from config import MAX_UPLOAD_BYTES
 from db.store import add_audit
+from services.document_service import extract_text_from_pdf
 from services.llm_service import evaluate_conversation
 from services.whisper_service import transcribe_audio
-from utils.security import require_api_key
+from utils.security import require_authenticated_user
 from utils.ws_manager import manager
 
 router = APIRouter()
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-ALLOWED_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac"}
-ALLOWED_CHAT_EXTS = {".txt", ".md", ".json", ".csv"}
+ALLOWED_AUDIO_EXTS = {
+    ".wav",
+    ".mp3",
+    ".m4a",
+    ".aac",
+    ".ogg",
+    ".oga",
+    ".flac",
+    ".opus",
+    ".webm",
+    ".wma",
+    ".aiff",
+    ".aif",
+    ".amr",
+    ".3gp",
+    ".mp4",
+    ".mpeg",
+    ".mpga",
+}
+ALLOWED_TEXT_EXTS = {".txt", ".md", ".json", ".csv", ".pdf"}
 
 
 def _build_agent_from_filename(filename: str) -> str:
@@ -96,6 +115,18 @@ def _validate_file(file: UploadFile, allowed_exts: set[str]) -> None:
         )
 
 
+def _validate_audio_file(file: UploadFile) -> None:
+    filename = file.filename or ""
+    ext = Path(filename).suffix.lower()
+    content_type = (file.content_type or "").lower()
+    if filename and (ext in ALLOWED_AUDIO_EXTS or content_type.startswith("audio/")):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unsupported audio file type: {ext or content_type or 'unknown'}",
+    )
+
+
 def _validate_size(raw_bytes: bytes) -> None:
     if len(raw_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(
@@ -109,9 +140,9 @@ async def upload_audio(
     file: UploadFile = File(...),
     agent_id: str | None = Form(None),
     agent_name: str | None = Form(None),
-    _auth: None = Depends(require_api_key),
+    user=Depends(require_authenticated_user),
 ):
-    _validate_file(file, ALLOWED_AUDIO_EXTS)
+    _validate_audio_file(file)
     raw = await file.read()
     _validate_size(raw)
 
@@ -141,12 +172,17 @@ async def upload_chat(
     file: UploadFile = File(...),
     agent_id: str | None = Form(None),
     agent_name: str | None = Form(None),
-    _auth: None = Depends(require_api_key),
+    user=Depends(require_authenticated_user),
 ):
-    _validate_file(file, ALLOWED_CHAT_EXTS)
+    _validate_file(file, ALLOWED_TEXT_EXTS)
     content = await file.read()
     _validate_size(content)
-    transcript = content.decode("utf-8", errors="replace")
+    ext = Path(file.filename or "").suffix.lower()
+    transcript = (
+        extract_text_from_pdf(content, file.filename or "upload.pdf")
+        if ext == ".pdf"
+        else content.decode("utf-8", errors="replace")
+    )
     evaluation = _normalize_eval(evaluate_conversation(transcript))
     conversation_id = _persist_audit(
         file.filename, "chat", transcript, evaluation, agent_id, agent_name

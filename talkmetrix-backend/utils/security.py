@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from config import API_AUTH_KEY, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS
+from db.store import get_user_by_session
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -21,6 +22,32 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Unauthorized",
     )
+
+
+def _extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+def require_authenticated_user(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+    user = get_user_by_session(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or invalid",
+        )
+    return user
 
 
 @dataclass

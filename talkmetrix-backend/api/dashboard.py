@@ -8,8 +8,7 @@ from statistics import mean
 from fastapi import APIRouter, Depends, HTTPException
 
 from db.store import delete_audit, get_audits
-from utils.security import require_api_key
-
+from utils.security import require_authenticated_user
 router = APIRouter(tags=["dashboard"])
 
 
@@ -106,13 +105,13 @@ def _build_summary(audits: list[dict]) -> dict:
 
 
 @router.get("/summary")
-def dashboard_summary():
+def dashboard_summary(user=Depends(require_authenticated_user)):
     audits = get_audits()
     return _build_summary(audits)
 
 
 @router.get("/conversations")
-def conversations():
+def conversations(user=Depends(require_authenticated_user)):
     audits = get_audits()
     items = []
     for audit in audits:
@@ -135,7 +134,7 @@ def conversations():
 
 
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str, _auth: None = Depends(require_api_key)):
+def delete_conversation(conversation_id: str, user=Depends(require_authenticated_user)):
     deleted = delete_audit(conversation_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -143,7 +142,7 @@ def delete_conversation(conversation_id: str, _auth: None = Depends(require_api_
 
 
 @router.get("/analytics")
-def analytics():
+def analytics(user=Depends(require_authenticated_user)):
     audits = get_audits()
     summary = _build_summary(audits)
 
@@ -174,16 +173,18 @@ def analytics():
 
 
 @router.get("/reports")
-def reports():
+def reports(user=Depends(require_authenticated_user)):
     audits = get_audits()
     items = []
     for idx, audit in enumerate(audits[:20], start=1):
+        source_type = str(audit.get("source_type", "chat")).lower()
         items.append(
             {
                 "id": f"RPT-{idx:03d}",
                 "name": f"Audit Report {audit['conversation_id']}",
+                "agent": audit.get("agent", "Unknown Agent"),
                 "date": audit["created_at"].split(" ")[0],
-                "type": "Quality",
+                "type": "Call" if source_type == "call" else "Chat",
                 "status": "completed",
                 "size": "1.2 MB",
             }
