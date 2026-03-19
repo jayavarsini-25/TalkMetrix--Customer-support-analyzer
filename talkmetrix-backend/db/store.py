@@ -91,6 +91,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS audits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
                 conversation_id TEXT NOT NULL UNIQUE,
                 filename TEXT,
                 source_type TEXT NOT NULL,
@@ -105,12 +106,20 @@ def init_db() -> None:
                 transcript TEXT NOT NULL,
                 violations TEXT NOT NULL,
                 suggestions TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
         )
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(audits)").fetchall()
+        }
+        if "user_id" not in columns:
+            conn.execute("ALTER TABLE audits ADD COLUMN user_id INTEGER")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audits_user_id ON audits(user_id)")
 
 
 def create_user(full_name: str, email: str, password: str, company: str) -> dict[str, Any]:
@@ -197,6 +206,7 @@ def add_audit(audit: dict[str, Any]) -> None:
         conn.execute(
             """
             INSERT OR REPLACE INTO audits (
+                user_id,
                 conversation_id,
                 filename,
                 source_type,
@@ -211,9 +221,10 @@ def add_audit(audit: dict[str, Any]) -> None:
                 transcript,
                 violations,
                 suggestions
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                audit["user_id"],
                 audit["conversation_id"],
                 audit.get("filename"),
                 audit["source_type"],
@@ -232,18 +243,19 @@ def add_audit(audit: dict[str, Any]) -> None:
         )
 
 
-def get_audits() -> list[dict[str, Any]]:
+def get_audits(user_id: int) -> list[dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM audits ORDER BY datetime(created_at) DESC, id DESC"
+            "SELECT * FROM audits WHERE user_id = ? ORDER BY datetime(created_at) DESC, id DESC",
+            (user_id,),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
-def delete_audit(conversation_id: str) -> bool:
+def delete_audit(user_id: int, conversation_id: str) -> bool:
     with _connect() as conn:
         cursor = conn.execute(
-            "DELETE FROM audits WHERE conversation_id = ?",
-            (conversation_id,),
+            "DELETE FROM audits WHERE user_id = ? AND conversation_id = ?",
+            (user_id, conversation_id),
         )
     return cursor.rowcount > 0

@@ -65,6 +65,7 @@ def _normalize_eval(result: dict) -> dict:
 
 
 def _persist_audit(
+    user_id: int,
     filename: str,
     source_type: str,
     transcript: str,
@@ -86,6 +87,7 @@ def _persist_audit(
 
     add_audit(
         {
+            "user_id": user_id,
             "conversation_id": conversation_id,
             "filename": filename,
             "source_type": source_type,
@@ -153,7 +155,7 @@ async def upload_audio(
     transcript = transcribe_audio(str(file_path))
     evaluation = _normalize_eval(evaluate_conversation(transcript))
     conversation_id = _persist_audit(
-        file.filename, "call", transcript, evaluation, agent_id, agent_name
+        int(user["id"]), file.filename, "call", transcript, evaluation, agent_id, agent_name
     )
 
     await manager.broadcast({"event": "audit_uploaded", "conversation_id": conversation_id})
@@ -185,7 +187,7 @@ async def upload_chat(
     )
     evaluation = _normalize_eval(evaluate_conversation(transcript))
     conversation_id = _persist_audit(
-        file.filename, "chat", transcript, evaluation, agent_id, agent_name
+        int(user["id"]), file.filename, "chat", transcript, evaluation, agent_id, agent_name
     )
 
     await manager.broadcast({"event": "audit_uploaded", "conversation_id": conversation_id})

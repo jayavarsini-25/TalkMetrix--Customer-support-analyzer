@@ -106,13 +106,13 @@ def _build_summary(audits: list[dict]) -> dict:
 
 @router.get("/summary")
 def dashboard_summary(user=Depends(require_authenticated_user)):
-    audits = get_audits()
+    audits = get_audits(int(user["id"]))
     return _build_summary(audits)
 
 
 @router.get("/conversations")
 def conversations(user=Depends(require_authenticated_user)):
-    audits = get_audits()
+    audits = get_audits(int(user["id"]))
     items = []
     for audit in audits:
         items.append(
@@ -135,7 +135,7 @@ def conversations(user=Depends(require_authenticated_user)):
 
 @router.delete("/conversations/{conversation_id}")
 def delete_conversation(conversation_id: str, user=Depends(require_authenticated_user)):
-    deleted = delete_audit(conversation_id)
+    deleted = delete_audit(int(user["id"]), conversation_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"deleted": True, "conversation_id": conversation_id}
@@ -143,7 +143,7 @@ def delete_conversation(conversation_id: str, user=Depends(require_authenticated
 
 @router.get("/analytics")
 def analytics(user=Depends(require_authenticated_user)):
-    audits = get_audits()
+    audits = get_audits(int(user["id"]))
     summary = _build_summary(audits)
 
     agent_bars = []
@@ -174,7 +174,7 @@ def analytics(user=Depends(require_authenticated_user)):
 
 @router.get("/reports")
 def reports(user=Depends(require_authenticated_user)):
-    audits = get_audits()
+    audits = get_audits(int(user["id"]))
     items = []
     for idx, audit in enumerate(audits[:20], start=1):
         source_type = str(audit.get("source_type", "chat")).lower()
